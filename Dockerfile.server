@@ -1,0 +1,8 @@
+FROM python:3.9-slim
+
+
+COPY signing-server.py .
+
+RUN pip install eth_account
+
+CMD [ "python3", "signing-server.py" ]
