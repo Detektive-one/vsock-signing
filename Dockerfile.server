@@ -3,6 +3,6 @@
 
 FROM python:3.7.9-alpine3.12
 
-COPY vsock-sample.py .
+COPY signing-server.py .
 
-CMD ["/usr/local/bin/python3", "vsock-sample.py", "server", "5005"]
+CMD ["/usr/local/bin/python3", "signing-server.py", "server", "5005"]
