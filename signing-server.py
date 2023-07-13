@@ -1,28 +1,23 @@
-#!/usr/local/bin/env python3
-
-# Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-
 import socket
 import json
-import os
 import secrets
 import argparse
 import sys
+
 from eth_account import Account
-from eth_account.messages import encode_defunct
+
 
 def generate_dummy_private_key():
     # Generate a random private key
-    private_key = os.urandom(32).hex()
-    return "0x" + private_key
+    private_key = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    return private_key
 
 def generate_dummy_transaction_payload():
     # Generate dummy values for the transaction payload
     nonce = 0
     gas_price = 20000000000
     gas_limit = 21000
-    recipient = "0x" + secrets.token_hex(20)
+    recipient = "0x1234567890123456789012345678901234567890"
     amount = 1000000000000000000
     data = "0x" + secrets.token_hex(32)
 
@@ -37,9 +32,11 @@ def generate_dummy_transaction_payload():
 
     return transaction_payload
 
-def createPayload( private_key, transaction_payload):
+def createPayload():
 
-
+    private_key = generate_dummy_private_key()
+    transaction_payload = generate_dummy_transaction_payload()
+    
     # Prepare payload with private key and transaction payload
     payload = json.dumps({
         "private_key": private_key,
@@ -68,6 +65,7 @@ class VsockStream:
         while True:
             data = self.sock.recv(1024).decode()
             if not data:
+                #print("error)
                 break
             print(data, end='', flush=True)
         print()
@@ -87,7 +85,9 @@ def client_handler(args):
     response = client.recv_data()
     
     client.disconnect()
-    print(json.loads(response.decode()))
+    
+    #response_data = json.loads(response)
+    print(response)
 
 def sign_transaction(private_key, transaction_payload):
     # Convert the private key to an Ethereum account
@@ -102,12 +102,8 @@ def sign_transaction(private_key, transaction_payload):
     # Return the signed transaction and transaction hash
     return signed_txn.rawTransaction.hex(), txn_hash.hex()
 
-def send_ec2_server(payload,server):
-    
-   
-    
-
-    payload_json = json.loads(payload.decode())
+def send_ec2_server(payload):   
+    payload_json = json.loads(payload)
     private_key = payload_json["private_key"]
     transaction_payload = payload_json["transaction_payload"]  
 
@@ -120,13 +116,18 @@ def send_ec2_server(payload,server):
             "signed_transaction": signed_tx,
             "transaction_hash": tx_hash
         }
+        print(response_payload)
+	
+        return response_payload
+       
 
     except Exception as e:
         response_payload = {
             "error": str(e)
         }
 
-    return response_payload# Send the response payload back to the EC2 server
+        return response_payload
+
         
         
 
@@ -171,16 +172,17 @@ def server_handler(args):
     server = VsockListener()
     server.bind(args.port)
     payload = server.recv_data()
-    
-    signed = send_ec2_server(payload)
 
-    server.send_data(signed.encode())
+    data = send_ec2_server(payload)
+    #server.send_data(("hello").encode())
+    server.send_data(json.dumps(data).encode())
+
 
     
     
 
 def main():
-    parser = argparse.ArgumentParser(prog='vsock-sample')
+    parser = argparse.ArgumentParser(prog='signing-server')
     parser.add_argument("--version", action="version",
                         help="Prints version information.",
                         version='%(prog)s 0.1.0')
