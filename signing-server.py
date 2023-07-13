@@ -1,45 +1,93 @@
+#!/usr/local/bin/env python3
+
+# Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 import socket
 import json
+import os
+import secrets
+import argparse
+import sys
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
+def generate_dummy_private_key():
+    # Generate a random private key
+    private_key = os.urandom(32).hex()
+    return "0x" + private_key
 
-class VsockListener:
-    """Server"""
-    def __init__(self, conn_backlog=128):
-        self.conn_backlog = conn_backlog
+def generate_dummy_transaction_payload():
+    # Generate dummy values for the transaction payload
+    nonce = 0
+    gas_price = 20000000000
+    gas_limit = 21000
+    recipient = "0x" + secrets.token_hex(20)
+    amount = 1000000000000000000
+    data = "0x" + secrets.token_hex(32)
 
-    def bind(self, port):
-        """Bind and listen for connections on the specified port"""
+    transaction_payload = {
+        "nonce": nonce,
+        "gasPrice": gas_price,
+        "gas": gas_limit,
+        "to": recipient,
+        "value": amount,
+        "data": data
+    }
+
+    return transaction_payload
+
+def createPayload( private_key, transaction_payload):
+
+
+    # Prepare payload with private key and transaction payload
+    payload = json.dumps({
+        "private_key": private_key,
+        "transaction_payload": transaction_payload
+    })
+
+    return payload
+
+class VsockStream:
+    """Client"""
+    def __init__(self, conn_tmo=5):
+        self.conn_tmo = conn_tmo
+
+    def connect(self, endpoint):
+        """Connect to the remote endpoint"""
         self.sock = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
-        self.sock.bind((socket.VMADDR_CID_ANY, port))
-        self.sock.listen(self.conn_backlog)
+        self.sock.settimeout(self.conn_tmo)
+        self.sock.connect(endpoint)
+
+    def send_data(self, data):
+        """Send data to a remote endpoint"""
+        self.sock.sendall(data)
 
     def recv_data(self):
         """Receive data from a remote endpoint"""
-        received_data = b""
-        (from_client, (remote_cid, remote_port)) = self.sock.accept()
-
         while True:
-            try:
-                data = from_client.recv(1024)
-            except socket.error:
-                break
+            data = self.sock.recv(1024).decode()
             if not data:
                 break
-            received_data += data
+            print(data, end='', flush=True)
+        print()
+        return data
 
-        from_client.close()
-        return received_data
+    def disconnect(self):
+        """Close the client socket"""
+        self.sock.close()
 
 
-    def send_data(self, data):
-        """Send data to a renote endpoint"""
-        while True:
-            (to_client, (remote_cid, remote_port)) = self.sock.accept()
-            to_client.sendall(data)
-            to_client.close()
-
+def client_handler(args):
+    client = VsockStream()
+    endpoint = (args.cid, args.port)
+    client.connect(endpoint)
+    msg = createPayload()
+    client.send_data(msg.encode())
+    response = client.recv_data()
+    
+    client.disconnect()
+    print(json.loads(response.decode()))
 
 def sign_transaction(private_key, transaction_payload):
     # Convert the private key to an Ethereum account
@@ -78,21 +126,85 @@ def send_ec2_server(payload,server):
             "error": str(e)
         }
 
-        # Send the response payload back to the EC2 server
+    return response_payload# Send the response payload back to the EC2 server
         
-        server.send_data(json.dumps(response_payload).encode())
         
+
+class VsockListener:
+    """Server"""
+    def __init__(self, conn_backlog=128):
+        self.conn_backlog = conn_backlog
+
+    def bind(self, port):
+        """Bind and listen for connections on the specified port"""
+        self.sock = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+        self.sock.bind((socket.VMADDR_CID_ANY, port))
+        self.sock.listen(self.conn_backlog)
+
+    def recv_data(self):
+        """Receive data from a remote endpoint"""
+        received_data = b""
+        while True:
+            (from_client, (remote_cid, remote_port)) = self.sock.accept()
+
+            while True:
+                try:
+                    data = from_client.recv(1024)
+                except socket.error:
+                    break
+                if not data:
+                    break
+                received_data += data
+
+            from_client.close()
+            return received_data
+
+    def send_data(self, data):
+        """Send data to a renote endpoint"""
+        while True:
+            (to_client, (remote_cid, remote_port)) = self.sock.accept()
+            to_client.sendall(data)
+            to_client.close()
+
+
+def server_handler(args):
+    server = VsockListener()
+    server.bind(args.port)
+    payload = server.recv_data()
+    
+    signed = send_ec2_server(payload)
+
+    server.send_data(signed.encode())
+
+    
+    
 
 def main():
-    print("Signing server running...")    
-    port = 5005
+    parser = argparse.ArgumentParser(prog='vsock-sample')
+    parser.add_argument("--version", action="version",
+                        help="Prints version information.",
+                        version='%(prog)s 0.1.0')
+    subparsers = parser.add_subparsers(title="options")
 
-    server = VsockListener()
-    server.bind(socket.VMADDR_CID_ANY,port)  
-    payload = server.recv_data(4096)
+    client_parser = subparsers.add_parser("client", description="Client",
+                                          help="Connect to a given cid and port.")
+    client_parser.add_argument("cid", type=int, help="The remote endpoint CID.")
+    client_parser.add_argument("port", type=int, help="The remote endpoint port.")
+    client_parser.set_defaults(func=client_handler)
 
-    send_ec2_server(payload,server)
+    server_parser = subparsers.add_parser("server", description="Server",
+                                          help="Listen on a given port.")
+    server_parser.add_argument("port", type=int, help="The local port to listen on.")
+    server_parser.set_defaults(func=server_handler)
+
+    if len(sys.argv) < 2:
+        parser.print_usage()
+        sys.exit(1)
+
+    args = parser.parse_args()
+    args.func(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+    
