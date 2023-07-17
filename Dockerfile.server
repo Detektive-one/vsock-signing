@@ -2,7 +2,7 @@
 
 FROM python:3.10.12-alpine3.17
 
-COPY signing-server.py .
-RUN pip install eth-account
+COPY vsock.py .
 
-CMD ["python", "signing-server.py", "server", "5005"]
+
+CMD ["python", "vsock.py", "server", "5005"]
