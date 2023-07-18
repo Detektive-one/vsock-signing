@@ -1,11 +1,13 @@
 #!/usr/local/bin/env python3
 
-
+# Copyright 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 import argparse
 import socket
 import sys
-
+import json
+from cryptography.fernet import Fernet
 
 class VsockStream:
     """Client"""
@@ -31,17 +33,80 @@ class VsockStream:
             print(data, end='', flush=True)
         print()
 
-    def receive_input(self):
-        """Receive input from the user and send it to the server"""
-        while True:
-            input_data = input()
-            self.send_data(input_data.encode())
-            if input_data.lower() == "quit":
-                break
-
     def disconnect(self):
         """Close the client socket"""
         self.sock.close()
+        
+
+# Generate a random encryption key
+encryption_key = "1GavmnFkL469qzY_pRqhrS7D9fiCsf7jSDLZ3vVYV1o="
+
+#print(encryption_key.decode())
+cipher_suite = Fernet(encryption_key)
+
+
+def client_handler(args):
+    client = VsockStream()
+    endpoint = (args.cid, args.port)
+    client.connect(endpoint)
+    
+    # User input for username and password
+    username = input("Enter your username: ")
+    password = input("Enter your password: ")
+    
+    # Package the username and password into a dictionary
+    credentials = {
+        "username": username,
+        "password": password
+    }
+    
+    # Convert the dictionary to JSON
+    json_data = json.dumps(credentials)
+    
+    # Encrypt the JSON data
+    encrypted_data = cipher_suite.encrypt(json_data.encode())
+    
+    # Send the encrypted data to the server
+    client.send_data(encrypted_data)
+    
+    # client.disconnect()  # Remove this line
+
+
+def validate_credentials(credentials):
+    # Existing array of credentials (replace with your own logic)
+    encryption_key = "1GavmnFkL469qzY_pRqhrS7D9fiCsf7jSDLZ3vVYV1o="
+    cipher_suite = Fernet(encryption_key)
+    
+    existing_credentials = [
+        {
+            "username": "admin",
+            "password": "admin123"
+        },
+        {
+            "username": "user",
+            "password": "user123"
+        }
+    ]
+    
+    # Decrypt the encrypted data
+    decrypted_data = cipher_suite.decrypt(credentials)
+    
+    # Convert the decrypted data from bytes to string
+    decrypted_data = decrypted_data.decode()
+    
+    # Convert the JSON string to a dictionary
+    credentials = json.loads(decrypted_data)
+    
+    # Extract the username and password from the credentials dictionary
+    username = credentials.get("username")
+    password = credentials.get("password")
+    
+    # Check if the username and password match any existing credentials
+    for existing_credential in existing_credentials:
+        if existing_credential["username"] == username and existing_credential["password"] == password:
+            return "Login successful"
+    
+    return "Invalid credentials"
 
 
 class VsockListener:
@@ -62,48 +127,26 @@ class VsockListener:
             # Read 1024 bytes at a time
             while True:
                 try:
-                    data = from_client.recv(1024).decode()
+                    data = from_client.recv(1024)
                 except socket.error:
                     break
                 if not data:
                     break
-                print(data, end='', flush=True)
-                if data.lower() == "quit":
-                    break
-            print()
+                result = validate_credentials(data)
+                print(result)
             from_client.close()
 
-    def send_data(self, data):
-        """Send data to a remote endpoint"""
-        while True:
-            (to_client, (remote_cid, remote_port)) = self.sock.accept()
-            to_client.sendall(data)
-            to_client.close()
-
-    def receive_input(self):
-        """Receive input from the user and send it to the client"""
-        while True:
-            input_data = input()
-            self.send_data(input_data.encode())
-            if input_data.lower() == "quit":
-                break
 
 
-def client_handler(args):
-    client = VsockStream()
-    endpoint = (args.cid, args.port)
-    client.connect(endpoint)
-    msg = 'Hello, world!'
-    client.send_data(msg.encode())
-    client.receive_input()
-    client.disconnect()
+
+
 
 
 def server_handler(args):
     server = VsockListener()
     server.bind(args.port)
-    server.receive_input()
     server.recv_data()
+    server.send_data()
 
 
 def main():
