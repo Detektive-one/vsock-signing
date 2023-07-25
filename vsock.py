@@ -8,6 +8,7 @@ import socket
 import sys
 import json
 from cryptography.fernet import Fernet
+import requests
 
 class VsockStream:
     """Client"""
@@ -37,6 +38,19 @@ class VsockStream:
         """Close the client socket"""
         self.sock.close()
         
+
+def call_api_and_print_response():
+    api_url = "https://api.example.com/some_endpoint"  # Replace this with your API endpoint URL
+
+    try:
+        response = requests.get(api_url)
+        if response.status_code == 200:
+            print("API Response:")
+            print(response.text)  # Print the response content
+        else:
+            print(f"API Request Failed with Status Code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error making API request: {e}")
 
 # Generate a random encryption key
 encryption_key = "1GavmnFkL469qzY_pRqhrS7D9fiCsf7jSDLZ3vVYV1o="
@@ -147,6 +161,7 @@ def server_handler(args):
     server.bind(args.port)
     server.recv_data()
     server.send_data()
+    call_api_and_print_response()
 
 
 def main():
