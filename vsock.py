@@ -8,7 +8,7 @@ import socket
 import sys
 import json
 from cryptography.fernet import Fernet
-import requests
+
 
 class VsockStream:
     """Client"""
@@ -39,18 +39,43 @@ class VsockStream:
         self.sock.close()
         
 
+import http.client
+import json
+
 def call_api_and_print_response():
-    api_url = "https://catfact.ninja/fact"  # Replace this with your API endpoint URL
+    api_host = "catfact.ninja"  # Replace this with the actual API hostname
+    api_endpoint = "/facts"  # Replace this with the specific API endpoint path
+
+    # Establish a connection to the API server
+    conn = http.client.HTTPSConnection(api_host)
 
     try:
-        response = requests.get(api_url)
-        if response.status_code == 200:
+        # Send a GET request to the API
+        conn.request("GET", api_endpoint)
+        
+        # Get the response from the API
+        response = conn.getresponse()
+        
+        # Read the response data
+        response_data = response.read().decode()
+        
+        if response.status == 200:
             print("API Response:")
-            print(response.text)  # Print the response content
+            print(response_data)
         else:
-            print(f"API Request Failed with Status Code: {response.status_code}")
-    except requests.exceptions.RequestException as e:
+            print(f"API Request Failed with Status Code: {response.status}")
+    except Exception as e:
         print(f"Error making API request: {e}")
+    finally:
+        # Close the connection
+        conn.close()
+
+def server_handler(args):
+    # Rest of the server code...
+    call_api_and_print_response()
+
+# Rest of the code...
+
 
 # Generate a random encryption key
 encryption_key = "1GavmnFkL469qzY_pRqhrS7D9fiCsf7jSDLZ3vVYV1o="
