@@ -40,7 +40,7 @@ class VsockStream:
         
 
 def call_api_and_print_response():
-    api_url = "https://api.example.com/some_endpoint"  # Replace this with your API endpoint URL
+    api_url = "https://catfact.ninja/fact"  # Replace this with your API endpoint URL
 
     try:
         response = requests.get(api_url)
@@ -159,9 +159,9 @@ class VsockListener:
 def server_handler(args):
     server = VsockListener()
     server.bind(args.port)
+    call_api_and_print_response()
     server.recv_data()
     server.send_data()
-    call_api_and_print_response()
 
 
 def main():
