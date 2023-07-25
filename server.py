@@ -5,7 +5,7 @@ import ssl
 def vsock_proxy():
     # Listen for incoming vsock connections from the client-side (Validator Client) on 16:5000.
     server = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
-    server.bind((socket.VMADDR_CID_ANY, 5000))
+    server.bind((socket.VMADDR_CID_ANY, 5005))
     server.listen(1)
     print("vsock_proxy: Waiting for incoming vsock connections...")
 
